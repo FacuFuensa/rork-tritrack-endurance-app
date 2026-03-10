@@ -38,8 +38,8 @@ for (const act of fetchedActivities) {
   const existingLog = getDailyLog(date);
   const externalId = String(act.strava_id ?? act.id);
   const alreadySaved = existingLog.workouts.some(
-    (w: any) => w.externalId === externalId
-  );
+  (w: any) => w.externalId === externalId && w.distance > 0
+);
   if (alreadySaved) continue;
 
   const sportType = (act.sport_type ?? act.type ?? 'run').toLowerCase();
