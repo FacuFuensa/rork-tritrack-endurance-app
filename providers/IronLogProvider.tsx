@@ -3,6 +3,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTraining } from '@/providers/TrainingProvider';
+const { saveWorkout, getDailyLog, workoutConfigs } = useTraining();
 
 export const [IronLogProvider, useIronLog] = createContextHook(() => {
   const { session } = useAuth();
@@ -31,38 +32,57 @@ export const [IronLogProvider, useIronLog] = createContextHook(() => {
     setActivities(fetchedActivities);
 
     // Bridge Supabase activities into local dailyLogs
-    for (const act of fetchedActivities) {
-      const date = act.date?.split('T')[0] ?? act.start_date?.split('T')[0];
-      if (!date) continue;
+for (const act of fetchedActivities) {
+  const date = (act.date ?? act.start_date ?? '').split('T')[0];
+  if (!date) continue;
 
-      const existingLog = getDailyLog(date);
-      const alreadySaved = existingLog.workouts.some(
-        (w: any) => w.externalId === String(act.strava_id ?? act.id)
-      );
-      if (alreadySaved) continue;
+  const existingLog = getDailyLog(date);
+  const externalId = String(act.strava_id ?? act.id);
+  const alreadySaved = existingLog.workouts.some(
+    (w: any) => w.externalId === externalId
+  );
+  if (alreadySaved) continue;
 
-      const sportType = (act.sport_type ?? act.type ?? 'run').toLowerCase();
-      const typeMap: Record<string, string> = {
-        run: 'run', ride: 'bike', swim: 'swim',
-        virtualride: 'bike', trailrun: 'run',
-        walk: 'run', hike: 'run', workout: 'run',
-      };
+  const sportType = (act.sport_type ?? act.type ?? 'run').toLowerCase();
+  const typeMap: Record<string, string> = {
+    run: 'run', ride: 'bike', virtualride: 'bike',
+    swim: 'swim', trailrun: 'run', walk: 'run', hike: 'run', workout: 'run',
+  };
+  const mappedType = typeMap[sportType] ?? 'run';
 
-      saveWorkout(date, {
-        id: `supabase_${act.id}`,
-        type: typeMap[sportType] ?? 'run',
-        distance: Math.round(((act.distance ?? 0) / 1000) * 100) / 100, // meters → km
-        time: act.moving_time ?? act.elapsed_time ?? 0,
-        elevation: act.total_elevation_gain ?? 0,
-        externalId: String(act.strava_id ?? act.id),
-        sourceProvider: act.source ?? 'strava',
-      });
-    }
+  // Use whatever unit the user has set in settings for this sport
+  const config = workoutConfigs.find((c: any) => c.id === mappedType);
+  const targetUnit = config?.distanceUnit ?? 'km';
 
-    setLoading(false);
-  }, [userId, saveWorkout, getDailyLog]);
+  const distanceMeters = act.distance ?? 0;
+  let distance = 0;
+  if (targetUnit === 'meters') {
+    distance = Math.round(distanceMeters);
+  } else if (targetUnit === 'km') {
+    distance = Math.round((distanceMeters / 1000) * 100) / 100;
+  } else if (targetUnit === 'miles') {
+    distance = Math.round((distanceMeters / 1609.34) * 100) / 100;
+  } else if (targetUnit === 'yards') {
+    distance = Math.round(distanceMeters * 1.09361);
+  }
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const time = act.moving_time ?? act.elapsed_time ?? 0;
+  if (distance === 0 && time === 0) continue;
 
-  return { weeklyPlan, fullPlan, activities, loading, refresh: loadData };
+  saveWorkout(date, {
+    id: `supabase_${act.id}`,
+    type: mappedType,
+    distance,
+    time,
+    elevation: act.total_elevation_gain ?? 0,
+    externalId,
+    sourceProvider: act.source ?? 'strava',
+  });
+}
+setLoading(false);
+}, [userId, saveWorkout, getDailyLog, workoutConfigs]);
+
+useEffect(() => { loadData(); }, [loadData]);
+
+return { weeklyPlan, fullPlan, activities, loading, refresh: loadData };
 });
