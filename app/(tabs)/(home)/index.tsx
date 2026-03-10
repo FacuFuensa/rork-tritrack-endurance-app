@@ -30,11 +30,12 @@ import WeeklySummaryModal from '@/components/WeeklySummaryModal';
 import ProgressBottomSheet from '@/components/ProgressBottomSheet';
 import { useIronLog } from '@/providers/IronLogProvider';
 
-const { weeklyPlan, fullPlan, activities, markWorkoutComplete } = useIronLog();
+
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { weeklyPlan, fullPlan, activities, markWorkoutComplete } = useIronLog();
   const {
     profile,
     supplements,
