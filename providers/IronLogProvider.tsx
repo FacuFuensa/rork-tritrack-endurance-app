@@ -28,6 +28,7 @@ export const [IronLogProvider, useIronLog] = createContextHook(() => {
     setFullPlan(tp.data ?? null);
 
     const fetchedActivities = acts.data ?? [];
+    if (fetchedActivities.length > 0) console.log('ACT COLUMNS:', JSON.stringify(fetchedActivities[0]));
     setActivities(fetchedActivities);
 
     // Bridge Supabase activities into local dailyLogs
