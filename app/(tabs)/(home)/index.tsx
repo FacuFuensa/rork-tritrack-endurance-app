@@ -494,12 +494,12 @@ export default function HomeScreen() {
 
         {workoutConfigs.map((config) => (
           <WorkoutCard
-            key={config.id}
-            config={config}
-            workout={getWorkoutForType(config.id)}
-            onSave={handleSaveWorkout}
-            onDelete={handleDeleteWorkout}
-          />
+  key={getWorkoutForType(config.id)?.id ?? config.id}
+  config={config}
+  workout={getWorkoutForType(config.id)}
+  onSave={handleSaveWorkout}
+  onDelete={handleDeleteWorkout}
+/>
         ))}
 
         {supplements.length > 0 ? (
