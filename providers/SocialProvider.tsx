@@ -189,7 +189,7 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
       try {
         const profile = await ensureUserProfile(
           session.user.id,
-          account.displayName,
+          account.name ?? account.displayName,
           nameTag?.tag
         );
 
