@@ -125,7 +125,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     return {
       id: s.user.id,
       email: s.user.email ?? '',
-      displayName: s.user.user_metadata?.display_name ?? s.user.email?.split('@')[0] ?? 'Athlete',
+      displayName: s.user.user_metadata?.full_name ?? s.user.user_metadata?.display_name ?? s.user.email?.split('@')[0] ?? 'Athlete',
       provider: 'email',
       createdAt: s.user.created_at,
       lastLoginAt: new Date().toISOString(),
