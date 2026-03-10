@@ -46,10 +46,16 @@ export async function ensureUserProfile(
       return existing;
     }
 
-    const nameTag = suggestedNameTag
-      ? suggestedNameTag.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20)
-      : (displayName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 15) +
-        Math.random().toString(36).slice(2, 5));
+    function tagFromEmail(email: string): string {
+  return email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20);
+}
+
+const emailTag = tagFromEmail(
+  (await supabase.auth.getUser()).data.user?.email ?? displayName
+);
+const nameTag = suggestedNameTag
+  ? suggestedNameTag.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().slice(0, 20)
+  : emailTag;
 
     const { data, error: insertError } = await supabase
       .from('profiles')
@@ -63,7 +69,7 @@ export async function ensureUserProfile(
 
     if (insertError) {
       if (insertError.code === '23505') {
-        const retryTag = nameTag + Math.random().toString(36).slice(2, 4);
+        const retryTag = nameTag + '_' + Math.random().toString(36).slice(2, 5);
         const { data: retryData } = await supabase
           .from('profiles')
           .insert({
