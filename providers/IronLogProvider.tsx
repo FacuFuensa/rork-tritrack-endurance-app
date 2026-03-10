@@ -3,11 +3,10 @@ import createContextHook from '@nkzw/create-context-hook';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTraining } from '@/providers/TrainingProvider';
-const { saveWorkout, getDailyLog, workoutConfigs } = useTraining();
 
 export const [IronLogProvider, useIronLog] = createContextHook(() => {
   const { session } = useAuth();
-  const { saveWorkout, getDailyLog } = useTraining();
+  const { saveWorkout, getDailyLog, workoutConfigs } = useTraining();
   const userId = session?.user?.id ?? null;
 
   const [weeklyPlan, setWeeklyPlan] = useState<any>(null);
