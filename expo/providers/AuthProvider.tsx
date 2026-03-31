@@ -26,8 +26,12 @@ const LEGACY_KEYS: Record<string, string> = {
   sourcePrefs: 'tritrack_source_prefs',
 };
 
-function userKey(userId: string, base: string): string {
-  return `tritrack:${userId}:${base}`;
+function storageKey(scope: string, base: string): string {
+  return `tritrack:${scope}:${base}`;
+}
+
+function getStorageScope(userId: string | null): string {
+  return userId ?? 'guest';
 }
 
 async function getWithFallback(namespacedKey: string, legacyKey: string): Promise<string | null> {
@@ -74,12 +78,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
   const userId = session?.user?.id ?? null;
-  const userIdRef = useRef<string | null>(null);
+  const storageScope = useMemo(() => getStorageScope(userId), [userId]);
+  const storageScopeRef = useRef<string>('guest');
   const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
+    storageScopeRef.current = storageScope;
+  }, [storageScope]);
 
   const resetAuthDataToDefaults = useCallback(() => {
     console.log('[AuthProvider] Resetting auth data to defaults');
@@ -99,8 +104,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log(`[AuthProvider] User changed from ${prev} to ${userId}, resetting data`);
       resetAuthDataToDefaults();
       queryClient.removeQueries({ queryKey: ['tritrack-auth-data'] });
+      queryClient.removeQueries({ queryKey: ['tritrack-auth-data', prev] });
+      queryClient.removeQueries({ queryKey: ['tritrack-auth-data', storageScope] });
     }
-  }, [userId, resetAuthDataToDefaults, queryClient]);
+  }, [queryClient, resetAuthDataToDefaults, storageScope, userId]);
 
   const persistMutation = useMutation({
     mutationFn: async ({ key, data }: { key: string; data: unknown }) => {
@@ -112,12 +119,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   });
 
   const persist = useCallback((base: string, data: unknown) => {
-    const uid = userIdRef.current;
-    if (!uid) {
-      console.warn('[AuthProvider] No userId, skipping persist for:', base);
-      return;
-    }
-    const key = userKey(uid, base);
+    const scope = storageScopeRef.current;
+    const key = storageKey(scope, base);
     persistMutation.mutate({ key, data });
   }, [persistMutation]);
 
@@ -166,7 +169,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
     };
 
-    initSession();
+    void initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       if (!mounted) return;
@@ -196,20 +199,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, [buildAccountFromSession]);
 
   const dataQuery = useQuery({
-    queryKey: ['tritrack-auth-data', userId],
+    queryKey: ['tritrack-auth-data', storageScope],
     queryFn: async () => {
-      if (!userId) return null;
-      console.log('[AuthProvider] Loading user data for:', userId);
+      console.log('[AuthProvider] Loading auth data for scope:', storageScope);
 
-      const uk = (base: string) => userKey(userId, base);
+      const scopedKey = (base: string) => storageKey(storageScope, base);
 
       const [intg, wd, ws, iw, cs, sp] = await Promise.all([
-        getWithFallback(uk('integrations'), LEGACY_KEYS.integrations),
-        getWithFallback(uk('whoop_data'), LEGACY_KEYS.whoopData),
-        getWithFallback(uk('whoop_sync'), LEGACY_KEYS.whoopSync),
-        getWithFallback(uk('imported_workouts'), LEGACY_KEYS.importedWorkouts),
-        getWithFallback(uk('cloud_sync'), LEGACY_KEYS.cloudSyncEnabled),
-        getWithFallback(uk('source_prefs'), LEGACY_KEYS.sourcePrefs),
+        getWithFallback(scopedKey('integrations'), LEGACY_KEYS.integrations),
+        getWithFallback(scopedKey('whoop_data'), LEGACY_KEYS.whoopData),
+        getWithFallback(scopedKey('whoop_sync'), LEGACY_KEYS.whoopSync),
+        getWithFallback(scopedKey('imported_workouts'), LEGACY_KEYS.importedWorkouts),
+        getWithFallback(scopedKey('cloud_sync'), LEGACY_KEYS.cloudSyncEnabled),
+        getWithFallback(scopedKey('source_prefs'), LEGACY_KEYS.sourcePrefs),
       ]);
       return {
         integrations: intg ? JSON.parse(intg) : DEFAULT_INTEGRATIONS,
@@ -220,12 +222,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         sourcePreferences: sp ? JSON.parse(sp) : DEFAULT_SOURCE_PREFS,
       };
     },
-    enabled: !authLoading && !!userId,
+    enabled: !authLoading,
     staleTime: Infinity,
   });
 
   useEffect(() => {
-    if (dataQuery.data) {
+    if (!authLoading && dataQuery.data) {
       console.log('[AuthProvider] User data loaded');
       const loadedIntegrations = dataQuery.data.integrations ?? {};
       const mergedIntegrations: Record<IntegrationType, IntegrationConfig> = {
@@ -241,7 +243,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setCloudSyncEnabled(dataQuery.data.cloudSyncEnabled ?? false);
       setSourcePreferences(dataQuery.data.sourcePreferences ?? DEFAULT_SOURCE_PREFS);
     }
-  }, [dataQuery.data]);
+  }, [authLoading, dataQuery.data]);
 
   const signUpWithEmail = useCallback(async (email: string, password: string, displayName: string) => {
     if (!isSupabaseConfigured()) {
@@ -325,10 +327,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setAccount((prev) => {
       if (!prev) return prev;
       const next = { ...prev, ...updates };
-      persist('account', next);
       return next;
     });
-  }, [persist]);
+  }, []);
 
   const toggleCloudSync = useCallback((enabled: boolean) => {
     setCloudSyncEnabled(enabled);
@@ -439,7 +440,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const isConfigured = useMemo(() => isSupabaseConfigured(), []);
 
-  return {
+  return useMemo(() => ({
     isConfigured,
     account,
     session,
@@ -465,6 +466,37 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     addImportedWorkouts,
     sourcePreferences,
     updateSourcePreference,
-    isLoading: (authLoading) || (!!userId && dataQuery.isLoading),
-  };
+    authReady: !authLoading,
+    storageScope,
+    isLoading: authLoading || dataQuery.isLoading,
+  }), [
+    account,
+    session,
+    isSignedIn,
+    signUpWithEmail,
+    signInWithEmail,
+    signOut,
+    resetPassword,
+    updateAccount,
+    cloudSyncEnabled,
+    toggleCloudSync,
+    integrations,
+    updateIntegration,
+    whoopData,
+    updateWhoopData,
+    whoopSync,
+    updateWhoopSync,
+    getWhoopMetricsForDate,
+    getLatestWhoopMetrics,
+    setManualOverride,
+    clearManualOverride,
+    importedWorkouts,
+    addImportedWorkouts,
+    sourcePreferences,
+    updateSourcePreference,
+    authLoading,
+    dataQuery.isLoading,
+    isConfigured,
+    storageScope,
+  ]);
 });

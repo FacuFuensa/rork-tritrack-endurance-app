@@ -31,8 +31,12 @@ const LEGACY_KEYS: Record<string, string> = {
   hasSeenEventOnboarding: 'tritrack_has_seen_event_onboarding',
 };
 
-function userKey(userId: string, base: string): string {
-  return `tritrack:${userId}:${base}`;
+function storageKey(scope: string, base: string): string {
+  return `tritrack:${scope}:${base}`;
+}
+
+function getStorageScope(userId: string | null): string {
+  return userId ?? 'guest';
 }
 
 async function getWithFallback(namespacedKey: string, legacyKey: string): Promise<string | null> {
@@ -59,10 +63,11 @@ interface StoredData {
 
 export const [TrainingProvider, useTraining] = createContextHook(() => {
   const queryClient = useQueryClient();
-  const { account, session } = useAuth();
+  const { account, session, authReady } = useAuth();
 
   const userId = account?.id ?? session?.user?.id ?? null;
-  const userIdRef = useRef<string | null>(null);
+  const storageScope = useMemo(() => getStorageScope(userId), [userId]);
+  const storageScopeRef = useRef<string>('guest');
   const prevUserIdRef = useRef<string | null>(null);
 
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
@@ -74,8 +79,8 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
   const [hasSeenEventOnboarding, setHasSeenEventOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
+    storageScopeRef.current = storageScope;
+  }, [storageScope]);
 
   const resetToDefaults = useCallback(() => {
     console.log('[TrainingProvider] Resetting to defaults');
@@ -96,30 +101,31 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
       console.log(`[TrainingProvider] User changed from ${prev} to ${userId}, resetting`);
       resetToDefaults();
       queryClient.removeQueries({ queryKey: ['tritrack-training-data'] });
+      queryClient.removeQueries({ queryKey: ['tritrack-training-data', prev] });
+      queryClient.removeQueries({ queryKey: ['tritrack-training-data', storageScope] });
     }
 
     if (userId === null && prev !== null) {
       console.log('[TrainingProvider] User signed out, resetting');
       resetToDefaults();
     }
-  }, [userId, resetToDefaults, queryClient]);
+  }, [queryClient, resetToDefaults, storageScope, userId]);
 
   const dataQuery = useQuery<StoredData | null>({
-    queryKey: ['tritrack-training-data', userId],
+    queryKey: ['tritrack-training-data', storageScope],
     queryFn: async () => {
-      if (!userId) return null;
-      console.log('[TrainingProvider] Loading data for user:', userId);
+      console.log('[TrainingProvider] Loading data for scope:', storageScope);
 
-      const uk = (base: string) => userKey(userId, base);
+      const scopedKey = (base: string) => storageKey(storageScope, base);
 
       const [p, s, r, l, wc, ev, onb] = await Promise.all([
-        getWithFallback(uk('profile'), LEGACY_KEYS.profile),
-        getWithFallback(uk('supplements'), LEGACY_KEYS.supplements),
-        getWithFallback(uk('recovery'), LEGACY_KEYS.recovery),
-        getWithFallback(uk('logs'), LEGACY_KEYS.logs),
-        getWithFallback(uk('workout_configs'), LEGACY_KEYS.workoutConfigs),
-        getWithFallback(uk('events'), LEGACY_KEYS.events),
-        getWithFallback(uk('has_seen_event_onboarding'), LEGACY_KEYS.hasSeenEventOnboarding),
+        getWithFallback(scopedKey('profile'), LEGACY_KEYS.profile),
+        getWithFallback(scopedKey('supplements'), LEGACY_KEYS.supplements),
+        getWithFallback(scopedKey('recovery'), LEGACY_KEYS.recovery),
+        getWithFallback(scopedKey('logs'), LEGACY_KEYS.logs),
+        getWithFallback(scopedKey('workout_configs'), LEGACY_KEYS.workoutConfigs),
+        getWithFallback(scopedKey('events'), LEGACY_KEYS.events),
+        getWithFallback(scopedKey('has_seen_event_onboarding'), LEGACY_KEYS.hasSeenEventOnboarding),
       ]);
 
       const parsedProfile = p ? JSON.parse(p) : DEFAULT_PROFILE;
@@ -147,12 +153,12 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
         hasSeenEventOnboarding: onb === 'true',
       };
     },
-    enabled: !!userId,
+    enabled: authReady,
     staleTime: Infinity,
   });
 
   useEffect(() => {
-    if (dataQuery.data) {
+    if (authReady && dataQuery.data) {
       console.log('[TrainingProvider] Data loaded, syncing to state');
       setProfile(dataQuery.data.profile);
       setSupplements(dataQuery.data.supplements);
@@ -162,7 +168,7 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
       setEvents(dataQuery.data.events);
       setHasSeenEventOnboarding(dataQuery.data.hasSeenEventOnboarding);
     }
-  }, [dataQuery.data]);
+  }, [authReady, dataQuery.data]);
 
   const persistMutation = useMutation({
     mutationFn: async ({ key, data }: { key: string; data: unknown }) => {
@@ -174,12 +180,7 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
   });
 
   const persist = useCallback((base: string, data: unknown) => {
-    const uid = userIdRef.current;
-    if (!uid) {
-      console.warn('[TrainingProvider] No userId, skipping persist for:', base);
-      return;
-    }
-    const key = userKey(uid, base);
+    const key = storageKey(storageScopeRef.current, base);
     persistMutation.mutate({ key, data });
   }, [persistMutation]);
 
@@ -433,15 +434,15 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
   const clearAllData = useCallback(async () => {
     if (!userId) return;
     try {
-      const uk = (base: string) => userKey(userId, base);
+      const scopedKey = (base: string) => storageKey(storageScope, base);
       await Promise.all([
-        AsyncStorage.removeItem(uk('profile')),
-        AsyncStorage.removeItem(uk('supplements')),
-        AsyncStorage.removeItem(uk('recovery')),
-        AsyncStorage.removeItem(uk('logs')),
-        AsyncStorage.removeItem(uk('workout_configs')),
-        AsyncStorage.removeItem(uk('events')),
-        AsyncStorage.removeItem(uk('has_seen_event_onboarding')),
+        AsyncStorage.removeItem(scopedKey('profile')),
+        AsyncStorage.removeItem(scopedKey('supplements')),
+        AsyncStorage.removeItem(scopedKey('recovery')),
+        AsyncStorage.removeItem(scopedKey('logs')),
+        AsyncStorage.removeItem(scopedKey('workout_configs')),
+        AsyncStorage.removeItem(scopedKey('events')),
+        AsyncStorage.removeItem(scopedKey('has_seen_event_onboarding')),
       ]);
       resetToDefaults();
       queryClient.invalidateQueries({ queryKey: ['tritrack-training-data'] });
@@ -449,17 +450,16 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
     } catch (e) {
       console.log('[TrainingProvider] Clear error:', e);
     }
-  }, [userId, queryClient, resetToDefaults]);
+  }, [queryClient, resetToDefaults, storageScope, userId]);
 
   const markEventOnboardingSeen = useCallback(async () => {
-    if (!userIdRef.current) return;
     console.log('[TrainingProvider] Marking event onboarding as seen');
     setHasSeenEventOnboarding(true);
-    const key = userKey(userIdRef.current, 'has_seen_event_onboarding');
+    const key = storageKey(storageScopeRef.current, 'has_seen_event_onboarding');
     await AsyncStorage.setItem(key, 'true');
   }, []);
 
-  const isDataReady = !!userId && !!dataQuery.data;
+  const isDataReady = authReady && dataQuery.data !== undefined;
 
   return {
     profile,
@@ -482,7 +482,7 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
     toggleSupplement,
     toggleRecovery,
     clearAllData,
-    isLoading: !!userId && dataQuery.isLoading,
+    isLoading: authReady ? dataQuery.isLoading : true,
     dataReady: isDataReady,
     events,
     addEvent,
@@ -493,5 +493,39 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
     setActiveEventId,
     hasSeenEventOnboarding,
     markEventOnboardingSeen,
-  };
+  });
+}, [
+  activeEvent,
+  activeGoalEvent,
+  addEvent,
+  addRecoveryOption,
+  addSupplement,
+  addWorkoutConfig,
+  clearAllData,
+  dailyLogs,
+  dataQuery.isLoading,
+  deleteEvent,
+  deleteWorkout,
+  events,
+  getDailyLog,
+  hasSeenEventOnboarding,
+  isDataReady,
+  markEventOnboardingSeen,
+  profile,
+  recoveryOptions,
+  removeRecoveryOption,
+  removeSupplement,
+  removeWorkoutConfig,
+  saveWorkout,
+  supplements,
+  toggleRecovery,
+  toggleSupplement,
+  updateDailyLog,
+  updateEvent,
+  updateProfile,
+  updateRecoveryOption,
+  updateWorkoutConfig,
+  workoutConfigs,
+  authReady,
+]);
 });

@@ -69,10 +69,11 @@ export interface SearchResultUser {
 
 export const [SocialProvider, useSocial] = createContextHook(() => {
   const queryClient = useQueryClient();
-  const { account, session, isSignedIn } = useAuth();
+  const { account, session, isSignedIn, authReady } = useAuth();
 
   const userId = account?.id ?? session?.user?.id ?? null;
-  const userIdRef = useRef<string | null>(null);
+  const storageScope = useMemo(() => getStorageScope(userId), [userId]);
+  const storageScopeRef = useRef<string>('guest');
   const prevUserIdRef = useRef<string | null>(null);
 
   const [nameTag, setNameTag] = useState<NameTag | null>(null);
@@ -86,8 +87,8 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
   const [supabaseReady, setSupabaseReady] = useState<boolean>(false);
 
   useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
+    storageScopeRef.current = storageScope;
+  }, [storageScope]);
 
   const resetToDefaults = useCallback(() => {
     console.log('[SocialProvider] Resetting to defaults');
@@ -110,30 +111,31 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
       console.log(`[SocialProvider] User changed from ${prev} to ${userId}, resetting`);
       resetToDefaults();
       queryClient.removeQueries({ queryKey: ['tritrack-social-local'] });
+      queryClient.removeQueries({ queryKey: ['tritrack-social-local', prev] });
+      queryClient.removeQueries({ queryKey: ['tritrack-social-local', storageScope] });
     }
 
     if (userId === null && prev !== null) {
       console.log('[SocialProvider] User signed out, resetting');
       resetToDefaults();
     }
-  }, [userId, resetToDefaults, queryClient]);
+  }, [queryClient, resetToDefaults, storageScope, userId]);
 
   const localDataQuery = useQuery({
-    queryKey: ['tritrack-social-local', userId],
+    queryKey: ['tritrack-social-local', storageScope],
     queryFn: async () => {
-      if (!userId) return null;
-      console.log('[SocialProvider] Loading local social data for user:', userId);
+      console.log('[SocialProvider] Loading local social data for scope:', storageScope);
 
-      const uk = (base: string) => userKey(userId, base);
+      const scopedKey = (base: string) => storageKey(storageScope, base);
 
       const [nt, fr, inc, out, priv, inv, sh] = await Promise.all([
-        getWithFallback(uk('nametag'), LEGACY_KEYS.nameTag),
-        getWithFallback(uk('friends'), LEGACY_KEYS.friends),
-        getWithFallback(uk('incoming_requests'), LEGACY_KEYS.incomingRequests),
-        getWithFallback(uk('outgoing_requests'), LEGACY_KEYS.outgoingRequests),
-        getWithFallback(uk('privacy'), LEGACY_KEYS.privacy),
-        getWithFallback(uk('invites'), LEGACY_KEYS.invites),
-        getWithFallback(uk('sharing'), LEGACY_KEYS.sharing),
+        getWithFallback(scopedKey('nametag'), LEGACY_KEYS.nameTag),
+        getWithFallback(scopedKey('friends'), LEGACY_KEYS.friends),
+        getWithFallback(scopedKey('incoming_requests'), LEGACY_KEYS.incomingRequests),
+        getWithFallback(scopedKey('outgoing_requests'), LEGACY_KEYS.outgoingRequests),
+        getWithFallback(scopedKey('privacy'), LEGACY_KEYS.privacy),
+        getWithFallback(scopedKey('invites'), LEGACY_KEYS.invites),
+        getWithFallback(scopedKey('sharing'), LEGACY_KEYS.sharing),
       ]);
       return {
         nameTag: nt ? JSON.parse(nt) : null,
@@ -145,12 +147,12 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
         sharingToggles: sh ? JSON.parse(sh) : DEFAULT_SHARING,
       };
     },
-    enabled: !!userId,
+    enabled: authReady,
     staleTime: Infinity,
   });
 
   useEffect(() => {
-    if (localDataQuery.data) {
+    if (authReady && localDataQuery.data) {
       console.log('[SocialProvider] Local data loaded');
       setNameTag(localDataQuery.data.nameTag);
       setFriends(localDataQuery.data.friends);
@@ -160,7 +162,7 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
       setInviteLinks(localDataQuery.data.inviteLinks);
       setSharingToggles(localDataQuery.data.sharingToggles);
     }
-  }, [localDataQuery.data]);
+  }, [authReady, localDataQuery.data]);
 
   const persistMutation = useMutation({
     mutationFn: async ({ key, data }: { key: string; data: unknown }) => {
@@ -169,12 +171,7 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
   });
 
   const persist = useCallback((base: string, data: unknown) => {
-    const uid = userIdRef.current;
-    if (!uid) {
-      console.warn('[SocialProvider] No userId, skipping persist for:', base);
-      return;
-    }
-    const key = userKey(uid, base);
+    const key = storageKey(storageScopeRef.current, base);
     persistMutation.mutate({ key, data });
   }, [persistMutation]);
 
@@ -189,7 +186,7 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
       try {
         const profile = await ensureUserProfile(
           session.user.id,
-          account.name ?? account.displayName,
+          account.displayName,
           nameTag?.tag
         );
 
@@ -232,8 +229,8 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
       }
     };
 
-    initProfile();
-  }, [isSignedIn, session?.user?.id, account?.displayName]);
+    void initProfile();
+  }, [account, isSignedIn, nameTag, persist, session?.user]);
 
   const createNameTag = useCallback(async (tag: string) => {
     const cleaned = tag.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
@@ -568,7 +565,7 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
   const activeFriends = useMemo(() => friends.filter((f) => !f.isBlocked), [friends]);
   const blockedFriends = useMemo(() => friends.filter((f) => f.isBlocked), [friends]);
 
-  return {
+  return useMemo(() => ({
     nameTag,
     createNameTag,
     updateNameTag,
@@ -600,6 +597,39 @@ export const [SocialProvider, useSocial] = createContextHook(() => {
     supabaseReady,
     supaProfile,
     isSignedIn,
-    isLoading: !!userId && localDataQuery.isLoading,
-  };
+    isLoading: authReady ? localDataQuery.isLoading : true,
+  }), [
+    acceptRequest,
+    activeFriends,
+    blockedFriends,
+    blockUser,
+    cancelRequest,
+    createNameTag,
+    declineRequest,
+    generateInviteLink,
+    getRemoteFriendStats,
+    hasIncomingFrom,
+    incomingRequests,
+    inviteLinks,
+    isRequestPending,
+    isSignedIn,
+    localDataQuery.isLoading,
+    nameTag,
+    outgoingRequests,
+    privacySetting,
+    refreshFriends,
+    removeFriend,
+    searchFriends,
+    sendRequest,
+    sharingToggles,
+    supaProfile,
+    supabaseReady,
+    syncStats,
+    unblockUser,
+    updateNameTag,
+    updatePrivacy,
+    updateSharing,
+    authReady,
+    friends,
+  ]);
 });
