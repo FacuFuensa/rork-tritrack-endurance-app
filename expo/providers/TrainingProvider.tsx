@@ -35,10 +35,6 @@ function storageKey(scope: string, base: string): string {
   return `tritrack:${scope}:${base}`;
 }
 
-function getStorageScope(userId: string | null): string {
-  return userId ?? 'guest';
-}
-
 async function getWithFallback(namespacedKey: string, legacyKey: string): Promise<string | null> {
   let val = await AsyncStorage.getItem(namespacedKey);
   if (val !== null) return val;
@@ -66,7 +62,7 @@ export const [TrainingProvider, useTraining] = createContextHook(() => {
   const { account, session, authReady } = useAuth();
 
   const userId = account?.id ?? session?.user?.id ?? null;
-  const storageScope = useMemo(() => getStorageScope(userId), [userId]);
+  const storageScope = userId ?? 'guest';
   const storageScopeRef = useRef<string>('guest');
   const prevUserIdRef = useRef<string | null>(null);
 
