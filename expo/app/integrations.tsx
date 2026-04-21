@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ExternalLink, RefreshCw, CheckCircle, XCircle, Zap } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { supabase } from '@/utils/supabase';
+import { supabase, isSupabaseConfigured } from '@/utils/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 
 const WEB_APP_URL = 'https://ironlog-inky.vercel.app';
@@ -34,26 +34,48 @@ export default function IntegrationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const checkStatus = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
+    if (!userId) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      console.log('[Integrations] Supabase not configured, using disconnected state');
+      setStatus({ strava: false, garmin: false });
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
-      const { data } = await supabase
+      const { data, error: profileError } = await supabase
         .from('profiles')
         .select('strava_access_token, strava_athlete_id')
         .eq('id', userId)
         .maybeSingle();
 
-      const { count: garminCount } = await supabase
+      if (profileError) {
+        console.error('[Integrations] Profile status query error:', profileError.message);
+      }
+
+      const { count: garminCount, error: garminError } = await supabase
         .from('activities')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('source', 'garmin');
+
+      if (garminError) {
+        console.error('[Integrations] Garmin status query error:', garminError.message);
+      }
 
       setStatus({
         strava: !!(data?.strava_access_token && data?.strava_athlete_id),
         garmin: (garminCount ?? 0) > 0,
       });
     } catch (e) {
-      console.log('[Integrations] Status check error:', e);
+      console.error('[Integrations] Status check error:', e);
+      setStatus({ strava: false, garmin: false });
     } finally {
       setLoading(false);
       setRefreshing(false);
