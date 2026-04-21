@@ -36,6 +36,14 @@ function userKey(userId: string, base: string): string {
   return `tritrack:${userId}:${base}`;
 }
 
+function storageKey(scope: string, base: string): string {
+  return `tritrack:${scope}:${base}`;
+}
+
+function getStorageScope(userId: string | null): string {
+  return userId ?? 'guest';
+}
+
 async function getWithFallback(namespacedKey: string, legacyKey: string): Promise<string | null> {
   let val = await AsyncStorage.getItem(namespacedKey);
   if (val !== null) return val;
