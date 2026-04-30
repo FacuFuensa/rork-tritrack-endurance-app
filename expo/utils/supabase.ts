@@ -7,6 +7,15 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 const hasCredentials = Boolean(supabaseUrl && supabaseAnonKey);
 
+const NETWORK_RETRY_DELAY_MS = 450;
+
+function getFetchUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === 'string') return input;
+  if (typeof URL !== 'undefined' && input instanceof URL) return input.toString();
+  if (typeof Request !== 'undefined' && input instanceof Request) return input.url;
+  return String(input);
+}
+
 function createNetworkFailureResponse(error: unknown): Response {
   const message = error instanceof Error ? error.message : 'Network request failed';
   return new Response(
@@ -22,13 +31,29 @@ function createNetworkFailureResponse(error: unknown): Response {
   );
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const supabaseFetch: typeof fetch = async (input, init) => {
+  const url = getFetchUrl(input);
+
   try {
+    const response = await fetch(input, init);
+    if (response.status !== 503) return response;
+
+    console.warn('[Supabase] 503 response, retrying once:', url);
+    await delay(NETWORK_RETRY_DELAY_MS);
     return await fetch(input, init);
   } catch (error) {
-    const url = typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString();
-    console.warn('[Supabase] Network request failed:', url, error);
-    return createNetworkFailureResponse(error);
+    console.warn('[Supabase] Network request failed after retry:', url, error);
+    try {
+      await delay(NETWORK_RETRY_DELAY_MS);
+      return await fetch(input, init);
+    } catch (retryError) {
+      console.warn('[Supabase] Network retry failed, returning recoverable response:', url, retryError);
+      return createNetworkFailureResponse(retryError);
+    }
   }
 };
 
