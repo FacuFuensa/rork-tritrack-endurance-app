@@ -7,7 +7,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TrainingProvider, useTraining } from "@/providers/TrainingProvider";
-import { IronLogProvider } from '@/providers/IronLogProvider';
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { SocialProvider } from "@/providers/SocialProvider";
 import { requestNotificationPermission, addNotificationResponseListener } from "@/utils/notifications";
@@ -126,14 +125,14 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
           <TrainingProvider>
-            <IronLogProvider>
+           
             <SocialProvider>
               <StatusBar style="light" />
               <AuthGate>
                 <RootLayoutNav />
               </AuthGate>
             </SocialProvider>
-            </IronLogProvider>
+            
           </TrainingProvider>
         </AuthProvider>
       </GestureHandlerRootView>
