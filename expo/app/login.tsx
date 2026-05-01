@@ -152,15 +152,14 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={[Colors.accent, Colors.social]}
-              style={styles.logoCircle}
-            >
-              <Activity size={36} color="#FFFFFF" />
-            </LinearGradient>
-            <Text style={styles.appName}>TriTrack</Text>
-            <Text style={styles.appTagline}>Your training companion</Text>
-          </View>
+  <Image
+    source={require('@/assets/images/icon.png')}
+    style={styles.logoCircle}
+    resizeMode="contain"
+  />
+  <Text style={styles.appName}>TriTrack</Text>
+  <Text style={styles.appTagline}>Your training companion</Text>
+</View>
 
           {authMode === 'forgot_password' ? (
             <View style={styles.formContainer}>
