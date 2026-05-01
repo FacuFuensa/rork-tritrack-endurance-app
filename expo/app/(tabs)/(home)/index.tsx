@@ -28,14 +28,13 @@ import SupplementModal from '@/components/SupplementModal';
 import RecoveryModal from '@/components/RecoveryModal';
 import WeeklySummaryModal from '@/components/WeeklySummaryModal';
 import ProgressBottomSheet from '@/components/ProgressBottomSheet';
-import { useIronLog } from '@/providers/IronLogProvider';
 
 
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { weeklyPlan, fullPlan, activities, markWorkoutComplete } = useIronLog();
+  
   const {
     profile,
     supplements,
