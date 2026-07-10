@@ -7,6 +7,7 @@ import { UserAccount, IntegrationConfig, IntegrationType, WhoopData, WhoopDailyM
 import type { Session } from '@supabase/supabase-js';
 
 function getAuthErrorMessage(error: string): string {
+  if (error.includes('Invalid API key')) return 'Supabase authentication key is invalid. Please update your Supabase environment variables (URL and anon key).';
   if (error.includes('Invalid login credentials')) return 'Invalid email or password. Please try again.';
   if (error.includes('Email not confirmed')) return 'Please check your email and confirm your account before signing in.';
   if (error.includes('User already registered')) return 'An account with this email already exists. Try signing in instead.';
