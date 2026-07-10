@@ -225,7 +225,7 @@ export default function OnboardingScreen() {
 
               <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
                 <Sparkles size={18} color="#FFFFFF" />
-                <Text style={styles.finishBtnText}>All set! Let's go</Text>
+                <Text style={styles.finishBtnText}>All set! Let&apos;s go</Text>
               </TouchableOpacity>
               <View style={{ height: 40 }} />
             </ScrollView>

@@ -166,7 +166,7 @@ export default function LoginScreen() {
             <View style={styles.formContainer}>
               <Text style={styles.formTitle}>Reset Password</Text>
               <Text style={styles.formSubtitle}>
-                Enter your email and we'll send you a reset link.
+                Enter your email and we&apos;ll send you a reset link.
               </Text>
 
               <View style={styles.inputGroup}>
@@ -317,7 +317,7 @@ export default function LoginScreen() {
                   {isSignUp ? (
                     <>Already have an account? <Text style={styles.switchModeHighlight}>Sign In</Text></>
                   ) : (
-                    <>Don't have an account? <Text style={styles.switchModeHighlight}>Sign Up</Text></>
+                    <>Don&apos;t have an account? <Text style={styles.switchModeHighlight}>Sign Up</Text></>
                   )}
                 </Text>
               </TouchableOpacity>

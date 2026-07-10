@@ -661,7 +661,7 @@ export default function FriendsScreen() {
                   <Bell size={32} color={Colors.textTertiary} />
                   <Text style={styles.emptyTitle}>No requests</Text>
                   <Text style={styles.emptySubtitle}>
-                    When you send or receive friend requests, they'll appear here.
+                    When you send or receive friend requests, they&apos;ll appear here.
                   </Text>
                 </View>
               </GlassCard>

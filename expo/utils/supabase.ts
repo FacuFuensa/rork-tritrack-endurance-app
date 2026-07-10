@@ -9,7 +9,7 @@ const hasCredentials = Boolean(supabaseUrl && supabaseAnonKey);
 
 const NETWORK_RETRY_DELAY_MS = 450;
 
-function getFetchUrl(input: Parameters<typeof fetch>[0]): string {
+function getFetchUrl(input: string | URL | Request): string {
   if (typeof input === 'string') return input;
   if (typeof URL !== 'undefined' && input instanceof URL) return input.toString();
   if (typeof Request !== 'undefined' && input instanceof Request) return input.url;

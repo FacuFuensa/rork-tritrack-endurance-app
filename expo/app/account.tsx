@@ -201,7 +201,7 @@ export default function AccountScreen() {
             </View>
             <Text style={styles.formTitle}>Reset Password</Text>
             <Text style={styles.formSubtitle}>
-              Enter your email and we'll send you a link to reset your password.
+              Enter your email and we&apos;ll send you a link to reset your password.
             </Text>
           </View>
 
@@ -361,7 +361,7 @@ export default function AccountScreen() {
             {isSignUp ? (
               <>Already have an account? <Text style={styles.switchModeHighlight}>Sign In</Text></>
             ) : (
-              <>Don't have an account? <Text style={styles.switchModeHighlight}>Sign Up</Text></>
+              <>Don&apos;t have an account? <Text style={styles.switchModeHighlight}>Sign Up</Text></>
             )}
           </Text>
         </TouchableOpacity>

@@ -145,7 +145,7 @@ export default function FriendProfileScreen() {
       <View style={styles.noStatsContainer}>
         <Trophy size={28} color={Colors.textTertiary} />
         <Text style={styles.noStatsText}>
-          No stats available yet. This user hasn't synced any training data.
+          No stats available yet. This user hasn&apos;t synced any training data.
         </Text>
       </View>
     </GlassCard>
